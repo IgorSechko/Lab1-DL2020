@@ -28,17 +28,17 @@ classes = ('plane', 'car', 'bird', 'cat',
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 8, 5)
+        self.conv1 = nn.Conv2d(3, 32, 5)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(8, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
+        self.conv2 = nn.Conv2d(32, 64, 7)
+        self.fc1 = nn.Linear(64 * 4 * 4, 180)
+        self.fc2 = nn.Linear(180, 84)
         self.fc3 = nn.Linear(84, 10)
         
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
+        x = x.view(-1, 64 * 4 * 4)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -53,8 +53,10 @@ net.to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(net.parameters(), lr=0.0001)
 
-losslist = []
-accuracylist = []
+trainloss = []
+trainaccuracy = []
+testloss = []
+testaccuracy = []
 
 for epoch in range(50):  
     running_loss = 0.0
@@ -66,9 +68,18 @@ for epoch in range(50):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-    print('[%d, %5d] loss: %.3f' %
+    print('[%d, %5d] trainloss: %.3f' %
           (epoch + 1, i + 1, running_loss / 12500))
-    losslist.append(running_loss / 12500)
+    trainloss.append(running_loss / 12500)
+    running_loss = 0.0
+    for i, data in enumerate(testloader, 0):
+        inputs, labels = data[0].to(device), data[1].to(device)
+        outputs = net(inputs)
+        loss = criterion(outputs, labels)
+        running_loss += loss.item()
+    print('[%d, %5d] testloss: %.3f' %
+          (epoch + 1, i + 1, running_loss / 2500))
+    testloss.append(running_loss / 2500)
     running_loss = 0.0
     correct = 0
     total = 0
@@ -79,23 +90,55 @@ for epoch in range(50):
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-    print('Accuracy on 10000 test images: %d %%' % (
+        print('accuracy on 10000 test images: %d %%' % (
         100 * correct / total))
-    accuracylist.append(correct / total)
+        testaccuracy.append(correct / total)
+        correct = 0
+        total = 0
+        for data in trainloader:
+            images, labels = data[0].to(device), data[1].to(device)
+            outputs = net(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+        print('accuracy on 10000 train images: %d %%' % (
+        100 * correct / total))
+        trainaccuracy.append(correct / total)
 
-PATH = './cifar_net50.pth'
+PATH = './cifar_net.pth'
 torch.save(net.state_dict(), PATH)
 
-with open('losslist50.txt', 'w') as file:
-    file.write(str(losslist))
-with open('accuracylist50.txt', 'w') as file:
-    file.write(str(accuracylist))
+with open('trainloss.txt', 'w') as file1:
+    file1.write(str(trainloss))
+with open('trainaccuracy.txt', 'w') as file2:
+    file2.write(str(trainaccuracy))
+with open('testloss.txt', 'w') as file3:
+    file3.write(str(testloss))
+with open('testaccuracy.txt', 'w') as file4:
+    file4.write(str(testaccuracy))
 
 x = np.arange(1, 51)
-plt.figure(num=1,figsize=(9,8))
-plt.axis([0,51,0,2])
-plotloss, = plt.plot(x, losslist, label='loss')
-plotaccuracy, = plt.plot(x, accuracylist, label='accuracy')
+plt.figure(num=1,figsize=(8,7))
+plt.axis([0,51,0,3])
+loss1, = plt.plot(x, testloss, label='loss on testset')
 plt.grid()
-plt.legend(handles=[plotloss, plotaccuracy])
+plt.legend(handles=[loss1])
+plt.show()
+plt.figure(num=1,figsize=(8,7))
+plt.axis([0,51,0,3])
+loss2, = plt.plot(x, trainloss, label='loss on trainset')
+plt.grid()
+plt.legend(handles=[loss2])
+plt.show()
+plt.figure(num=1,figsize=(8,7))
+plt.axis([0,51,0,1.02])
+accuracy1, = plt.plot(x, testaccuracy, label='accuracy on testset')
+plt.grid()
+plt.legend(handles=[accuracy1])
+plt.show()
+plt.figure(num=1,figsize=(8,7))
+plt.axis([0,51,0,1.02])
+accuracy2, = plt.plot(x, trainaccuracy, label='accuracy on trainset')
+plt.grid()
+plt.legend(handles=[accuracy2])
 plt.show()
